@@ -321,6 +321,7 @@ metadata:
   name: tectonic-identity-grpc-client-secret
   namespace: tectonic-system
 data:
+  ca-cert: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
   tls-cert: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-client.crt ) 
   tls-key: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-client.key )
 EOF
@@ -332,7 +333,7 @@ metadata:
   name: tectonic-identity-grpc-server-secret
   namespace: tectonic-system
 data:
+  ca-cert: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
   tls-cert: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-server.crt )
   tls-key: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-server.key )
 EOF
-
