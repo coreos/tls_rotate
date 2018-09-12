@@ -1,14 +1,28 @@
 git commit the generated dir
 
+MASTER_IPS=("")
+WORKER_IPS=("")
+ETCD_IPS=("")
+
+
 # etcd (optional):
 kubectl patch -f ./generated/patches/etcd/etcd-ca.patch -p "$(cat ./generated/patches/etcd/etcd-ca.patch)"
-kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
+# kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
+kubectl patch daemonsets -n kube-system kube-apiserver \
+    -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
 
 wait until new apiserver comes up
 
 # Copy generated to master nodes
 # on master nodes:
 
+for ADDR in $MASTER_IPS; do
+    echo "copy assets into master nodes"
+    scp -r StrictHostKeyChecking=no generated core@$ADDR:
+    echo "done"
+done
+
+# Update certs on etcd nodes.
 for ADDR in $ETCD_IPS; do
     echo "etcd on $ADDR restarting"
     scp -o StrictHostKeyChecking=no generated/tls/etcd/old_new_ca.crt core@$ADDR:/home/core/ca.crt
@@ -24,7 +38,9 @@ for ADDR in $ETCD_IPS; do
 done
 
 kubectl patch -f ./generated/patches/etcd/etcd-client-cert.patch -p "$(cat ./generated/patches/etcd/etcd-client-cert.patch)"
-kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
+kubectl patch daemonsets -n kube-system kube-apiserver \
+    -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
+
 
 wait until new apiserver comes up
 
@@ -52,23 +68,91 @@ kubectl patch -f ./generated/patches/step_1/kube-apiserver-secret.patch -p "$(ca
 
 kubectl patch -f ./generated/patches/step_1/kube-controller-manager-secret.patch -p "$(cat ./generated/patches/step_1/kube-controller-manager-secret.patch)"
 
-kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
 kubectl delete pod -l k8s-app=kube-controller-manager -n kube-system
 
-
+kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
 
 update kubeconfig on nodes by updating s3 bucket
 
-restart kubelet
+# restart kubelet
 
+for ADDR in $MASTER_IPS; do
+    echo "restarting kubelet"
+    ssh -A -o StrictHostKeyChecking=no core@$ADDR \
+         "sudo systemctl restart kubelet"
+
+    echo "kubelet on $ADDR restarted"
+done
 
 kubectl patch -f ./generated/patches/step_2/kube-apiserver-secret.patch -p "$(cat ./generated/patches/step_2/kube-apiserver-secret.patch)"
-
-kubectl scale deployments -n kube-system kube-scheduler --replicas 2
 
 kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
 
 export KUBECONFIG=$PWD/generated/auth/kubeconfig
+
+# wait for api server to be back.
+
+SCHEDULER_NODE_NAME=$(kubectl get pod -l k8s-app=kube-scheduler -n kube-system -ojson | jq -r .items[0].spec.nodeName)
+KUBE_SCHEDULER_IMAGE=$(kubectl get deployment kube-scheduler -n kube-system -ojson | jq -r .spec.template.spec.containers[0].image)
+
+
+cat <<EOF | kubectl create -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-scheduler-temp
+  namespace: kube-system
+spec:
+  containers:
+  - command:
+    - ./hyperkube
+    - scheduler
+    - --leader-elect=true
+    image: ${KUBE_SCHEDULER_IMAGE}
+    imagePullPolicy: IfNotPresent
+    livenessProbe:
+      failureThreshold: 3
+      httpGet:
+        path: /healthz
+        port: 10251
+        scheme: HTTP
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 15
+    name: kube-scheduler
+    resources: {}
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+  dnsPolicy: ClusterFirst
+  nodeName: ${SCHEDULER_NODE_NAME}
+  nodeSelector:
+    node-role.kubernetes.io/master: ""
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+EOF
+
+kubectl delete pod -l k8s-app=kube-scheduler -n kube-system
+
+kubectl delete pod kube-scheduler-temp -n kube-system
 
 # optional
 
@@ -76,9 +160,66 @@ kubectl patch -f ./generated/patches/step_3/kube-apiserver-secret.patch -p "$(ca
 
 kubectl patch -f ./generated/patches/step_3/kube-controller-manager-secret.patch -p "$(cat ./generated/patches/step_3/kube-controller-manager-secret.patch)"
 
-kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
 kubectl delete pod -l k8s-app=kube-controller-manager -n kube-system
+kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
+
+cat <<EOF | kubectl create -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-scheduler-temp
+  namespace: kube-system
+spec:
+  containers:
+  - command:
+    - ./hyperkube
+    - scheduler
+    - --leader-elect=true
+    image: ${KUBE_SCHEDULER_IMAGE}
+    imagePullPolicy: IfNotPresent
+    livenessProbe:
+      failureThreshold: 3
+      httpGet:
+        path: /healthz
+        port: 10251
+        scheme: HTTP
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 15
+    name: kube-scheduler
+    resources: {}
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+  dnsPolicy: ClusterFirst
+  nodeName: ${MASTER_NODE}
+  nodeSelector:
+    node-role.kubernetes.io/master: ""
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+EOF
+
 kubectl delete pod -l k8s-app=kube-scheduler -n kube-system
+
+kubectl delete pod kube-scheduler-temp -n kube-system
 
 update kubeconfig on nodes by updating s3 bucket
 
@@ -100,7 +241,6 @@ kubectl patch daemonsets -n kube-system kube-proxy \
     -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
 kubectl patch daemonsets -n kube-system pod-checkpointer \
     -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"`date +'%s'`\"}}}}}"
-
 
 
 # tectonic manifests
