@@ -14,18 +14,12 @@ Set the following environment variables to run this script:
     CLUSTER_NAME        Name of the cluster. If your API server is running on the
                         domain "my-cluster-k8s.example.com", the name of the cluster
                         is "my-cluster"
-                        
-    APISERVER_CLUSTER_IP
-                        Cluster IP address of the "kubernetes" service in the
-                        "default" namespace.
-    OLD_CA_CERT         Path to the old pem encoded CA certificate of your cluster.
-    OLD_ETCD_CA_CERT    Path to the old pem encoded CA certificate of the etcd cluster.
 EOF
     exit 1
 }
 
-if [ -z $(which kubelet) ]; then
-    echo "kubelet is required"
+if [ -z $(which kubectl) ]; then
+    echo "kubectl is required"
     exit 1
 fi
 
@@ -40,17 +34,10 @@ if [ -z $CLUSTER_NAME ]; then
     usage
 fi
 
-if [ -z $APISERVER_CLUSTER_IP ]; then
-    usage
-fi
 
-if [ -z $OLD_CA_CERT ]; then
-    usage
-fi
-
-if [ -z $OLD_ETCD_CA_CERT ]; then
-    usage
-fi
+export APISERVER_CLUSTER_IP=$(kubectl get services kubernetes -n default -o json | jq -r '.spec.clusterIP')
+OLD_CA=$(kubectl get secret kube-apiserver -n kube-system -o json | jq -r '.data["ca.crt"]')
+OLD_ETCD_CA=$(kubectl get secret kube-apiserver -n kube-system -o json | jq -r '.data["etcd-client-ca.crt"]')
 
 export DIR="generated"
 if [ $# -eq 1 ]; then
@@ -147,15 +134,14 @@ rm $CERT_DIR/100*
 rm $CERT_DIR/serial*
 rm $CERT_DIR/*.csr
 
-
 # Generate patches
 
 # 0. Create bundled CA certs and etcd patches.
 
-cp ${OLD_CA_CERT} ${CERT_DIR}/old_new_ca.crt
+echo ${OLD_CA} | base64 -d > ${CERT_DIR}/old_new_ca.crt
 cat ${CERT_DIR}/ca.crt >> ${CERT_DIR}/old_new_ca.crt
 
-cp ${OLD_ETCD_CA_CERT} ${ETCD_TLS}/old_new_ca.crt
+echo ${OLD_ETCD_CA} | base64 -d > ${ETCD_TLS}/old_new_ca.crt
 cat ${ETCD_TLS}/ca.crt >> ${ETCD_TLS}/old_new_ca.crt
 
 PATCH_ETCD=$PATCHES/etcd
@@ -207,7 +193,7 @@ data:
   ca.crt: $( openssl base64 -A -in ${CERT_DIR}/old_new_ca.crt )
 EOF
 
-cat > $PATCH_STEP_1/kubeconfig << EOF
+cat > $DIR/auth/kubeconfig << EOF
 apiVersion: v1
 kind: Config
 clusters:
@@ -226,6 +212,51 @@ contexts:
     user: kubelet
 EOF
 
+# Also generate patches that updates CAs in the tectonic-system
+cat > $PATCH_STEP_1/tectonic-ca-cert-secret.patch << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tectonic-ca-cert-secret
+  namespace: tectonic-system
+data:
+  ca-cert: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
+EOF
+
+cat > $PATCH_STEP_1/ingress-tls.patch << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tectonic-ingress-tls-secret
+  namespace: tectonic-system
+data:
+  tls.crt: $( openssl base64 -A -in ${CERT_DIR}/ingress-server.crt )
+  tls.key: $( openssl base64 -A -in ${CERT_DIR}/ingress-server.key )
+EOF
+
+cat > $PATCH_STEP_1/identity-grpc-client.patch << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tectonic-identity-grpc-client-secret
+  namespace: tectonic-system
+data:
+  ca-cert: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
+  tls-cert: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-client.crt ) 
+  tls-key: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-client.key )
+EOF
+
+cat > $PATCH_STEP_1/identity-grpc-server.patch << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tectonic-identity-grpc-server-secret
+  namespace: tectonic-system
+data:
+  ca-cert: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
+  tls-cert: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-server.crt )
+  tls-key: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-server.key )
+EOF
 
 # 3. Generate patches that updates to the apiserver.crt
 PATCH_STEP_2=$PATCHES/step_2
@@ -242,98 +273,7 @@ data:
   apiserver.key: $( openssl base64 -A -in ${CERT_DIR}/apiserver.key )
 EOF
 
-# 4. Generate patches that updates control plane to the new CA and certs.
-PATCH_STEP_3=$PATCHES/step_3
-mkdir -p $PATCH_STEP_3
 
-cat > $PATCH_STEP_3/kube-apiserver-secret.patch << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: kube-apiserver
-  namespace: kube-system
-data:
-  ca.crt: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
-  oidc-ca.crt: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
-EOF
-
-cat > $PATCH_STEP_3/kube-controller-manager-secret.patch <<EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: kube-controller-manager
-  namespace: kube-system
-data:
-  ca.crt: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
-EOF
-
-cat > $PATCH_STEP_3/kubeconfig << EOF
-apiVersion: v1
-kind: Config
-clusters:
-- name: my-cluster
-  cluster:
-    server: https://${CLUSTER_NAME}-api.${BASE_DOMAIN}:443
-    certificate-authority-data: $( openssl base64 -A -in ${CERT_DIR}/ca.crt ) 
-users:
-- name: kubelet
-  user:
-    client-certificate-data: $( openssl base64 -A -in $CERT_DIR/kubelet.crt ) 
-    client-key-data: $( openssl base64 -A -in $CERT_DIR/kubelet.key ) 
-contexts:
-- context:
-    cluster: my-cluster
-    user: kubelet
-EOF
-
-cp $PATCH_STEP_3/kubeconfig $DIR/auth/kubeconfig
-
-
-# 5. Generate patches that updates CAs in the tectonic-system
-PATCH_STEP_4=$PATCHES/step_4
-mkdir -p $PATCH_STEP_4
-
-cat > $PATCH_STEP_4/tectonic-ca-cert-secret.patch << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: tectonic-ca-cert-secret
-  namespace: tectonic-system
-data:
-  ca-cert: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
-EOF
-
-cat > $PATCH_STEP_4/ingress-tls.patch << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: tectonic-ingress-tls-secret
-  namespace: tectonic-system
-data:
-  tls.crt: $( openssl base64 -A -in ${CERT_DIR}/ingress-server.crt )
-  tls.key: $( openssl base64 -A -in ${CERT_DIR}/ingress-server.key )
-EOF
-
-cat > $PATCH_STEP_4/identity-grpc-client.patch << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: tectonic-identity-grpc-client-secret
-  namespace: tectonic-system
-data:
-  ca-cert: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
-  tls-cert: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-client.crt ) 
-  tls-key: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-client.key )
-EOF
-
-cat > $PATCH_STEP_4/identity-grpc-server.patch << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: tectonic-identity-grpc-server-secret
-  namespace: tectonic-system
-data:
-  ca-cert: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
-  tls-cert: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-server.crt )
-  tls-key: $( openssl base64 -A -in ${CERT_DIR}/identity-grpc-server.key )
-EOF
+echo ""
+echo "Certs and patches generated!"
+echo ""

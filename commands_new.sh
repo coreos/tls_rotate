@@ -1,12 +1,16 @@
-git commit the generated dir
+run `./gencert generated`
 
+git commit the generated dir
+require master ips
 MASTER_IPS=("")
 WORKER_IPS=("")
 ETCD_IPS=("")
 
-
 # etcd (optional):
 kubectl patch -f ./generated/patches/etcd/etcd-ca.patch -p "$(cat ./generated/patches/etcd/etcd-ca.patch)"
+
+sleep 10s
+
 # kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
 kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
 
@@ -38,6 +42,8 @@ done
 
 kubectl patch -f ./generated/patches/etcd/etcd-client-cert.patch -p "$(cat ./generated/patches/etcd/etcd-client-cert.patch)"
 
+sleep 10s
+
 kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
 
 wait until new apiserver comes up
@@ -60,41 +66,56 @@ for ADDR in $ETCD_IPS; do
     sleep 10
 done
 
+# verify everthing is still working
+
 # control plane
 
 kubectl patch -f ./generated/patches/step_1/kube-apiserver-secret.patch -p "$(cat ./generated/patches/step_1/kube-apiserver-secret.patch)"
 
 kubectl patch -f ./generated/patches/step_1/kube-controller-manager-secret.patch -p "$(cat ./generated/patches/step_1/kube-controller-manager-secret.patch)"
 
-kubectl patch -f ./generated/patches/step_4/tectonic-ca-cert-secret.patch -p "$(cat ./generated/patches/step_4/tectonic-ca-cert-secret.patch)"
+kubectl patch -f ./generated/patches/step_1/tectonic-ca-cert-secret.patch -p "$(cat ./generated/patches/step_1/tectonic-ca-cert-secret.patch)"
 
-kubectl patch -f ./generated/patches/step_4/ingress-tls.patch -p "$(cat ./generated/patches/step_4/ingress-tls.patch)"
+kubectl patch -f ./generated/patches/step_1/ingress-tls.patch -p "$(cat ./generated/patches/step_1/ingress-tls.patch)"
 
-kubectl patch -f ./generated/patches/step_4/identity-grpc-client.patch -p "$(cat ./generated/patches/step_4/identity-grpc-client.patch)"
+kubectl patch -f ./generated/patches/step_1/identity-grpc-client.patch -p "$(cat ./generated/patches/step_1/identity-grpc-client.patch)"
 
-kubectl patch -f ./generated/patches/step_4/identity-grpc-server.patch -p "$(cat ./generated/patches/step_4/identity-grpc-server.patch)"
+kubectl patch -f ./generated/patches/step_1/identity-grpc-server.patch -p "$(cat ./generated/patches/step_1/identity-grpc-server.patch)"
 
+sleep 10s
 
 kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
 
 wait until new apiserver comes up
 
-update kubeconfig on nodes by updating s3 bucket
+update kubeconfig on nodes by updating s3 bucket patches/step_1/kubeconfig
 
-# restart kubelet
+get the s3 bucket name
+
+# restart kubelets
 
 for ADDR in $MASTER_IPS; do
     echo "restarting kubelet"
     ssh -A -o StrictHostKeyChecking=no core@$ADDR \
-         "sudo systemctl reboot kubelet"
+         "sudo systemctl restart kubelet"
 
-    echo "kubelet on $ADDR restarted"
+    # Sleep one by one
 done
 
 kubectl patch -f ./generated/patches/step_2/kube-apiserver-secret.patch -p "$(cat ./generated/patches/step_2/kube-apiserver-secret.patch)"
+
+sleep 10s
 
 kubectl delete pod -l k8s-app=kube-apiserver -n kube-system
 
 export KUBECONFIG=$PWD/generated/auth/kubeconfig
 
+# restart nodes
 
+for ADDR in $MASTER_IPS; do
+    echo "rebooting $ADDR"
+    ssh -A -o StrictHostKeyChecking=no core@$ADDR \
+         "sudo systemctl reboot"
+
+    # Sleep one by one
+done
