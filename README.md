@@ -3,6 +3,13 @@ Instructions on how to rotate TLS CA and certs for a Tectonic cluster.
 
 ## Generate new certs and patches
 
+#### Prepare
+
+**CAUTION**: Before rotation, it's preferrable to back up your cluster:
+1. On an etcd node, take a backup of the current state.
+2. [Run bootkube recover](https://coreos.com/tectonic/docs/latest/troubleshooting/bootkube_recovery_tool.html) to extract the existing state from etcd. Copy this back to your working machine as a precaution, in case the control plane goes down.
+3. Download the current kubeconfig and assets.zip.
+
 #### Prerequisite
 
 - `jq`
@@ -18,8 +25,10 @@ export KUBECONFIG=PATH_TO_KUBECONFIG
 export BASE_DOMAIN=example.com
 export CLUSTER_NAME=my-cluster
 
-./gencert.sh generated
+./gencerts.sh generated
 ```
+
+**CAUTION**: PLEASE save the generated assets somewhere, it's IMPORTANT for future reference!
 
 ## Rotate Etcd CA and certs
 
@@ -69,6 +78,14 @@ On AWS platform, this will be achieved by replacing the kubeconfig file
 hosted on the S3 bucket with the generated kubeconfig at `./generated/auth/kubeconfig`
 
 A simple script (`aws/update_kubeconfig.sh`) is also provided for the task.
+
+**PLEASE MAKE SURE THE KUBECONFIG IS UPDATED CORRECTLY, OTHERWISE THE ROTATION WILL FAIL!**
+
+You can run the following command to verify:
+```shell
+aws s3 cp s3://S3_BUCKET_NAME/kubeconfig /tmp/kubeconfig
+diff /tmp/kubeconfig generated/auth/kubeconfig
+```
 
 ## Reboot Cluster
 

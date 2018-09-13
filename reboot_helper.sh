@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -eo pipefail
-
 function usage() {
     >&2 cat << EOF
 Usage: ./reboot_helper.sh
