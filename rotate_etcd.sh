@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+set -eo pipefail
 
 function usage() {
     >&2 cat << EOF
@@ -14,6 +14,7 @@ Set the following environment variables to run this script:
     ETCD_IPS            The list of private IPs of the etcd nodes, separated by space
 
     SSH_KEY             The path to the ssh private key that allows to login the master nodes
+
 EOF
     exit 1
 }
@@ -38,22 +39,23 @@ if [ -z $(which kubectl) ]; then
     exit 1
 fi
 
-if [ -z $KUBECONFIG ]; then
+if [ -z "$KUBECONFIG" ]; then
     usage
 fi
 
-if [ -z $MASTER_IPS ]; then
+if [ -z "$MASTER_IPS" ]; then
     usage
 fi
 
-if [ -z $ETCD_IPS ]; then
+if [ -z "$ETCD_IPS" ]; then
     usage
 fi
 
-if [ -z $SSH_KEY ]; then
+if [ -z "$SSH_KEY" ]; then
     usage
 fi
 
+set -u
 
 echo "update etcd CA"
 kubectl patch -f ./generated/patches/etcd/etcd-ca.patch -p "$(cat ./generated/patches/etcd/etcd-ca.patch)"
@@ -107,4 +109,5 @@ for ADDR in $ETCD_IPS; do
     sleep 10
 done
 
-echo "etcd CA and certs rotated!"
+echo
+echo "etcd CA and certs are succesfully rotated!"

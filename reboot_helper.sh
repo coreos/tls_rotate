@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+set -eo pipefail
 
 function usage() {
     >&2 cat << EOF
@@ -12,22 +12,25 @@ Set the following environment variables to run this script:
     WORKER_IPS          The list of private IPs of the worker nodes, separated by space
 
     SSH_KEY             The path to the ssh private key that allows to login the master nodes
+
 EOF
     exit 1
 }
 
 
-if [ -z $MASTER_IPS ]; then
+if [ -z "$MASTER_IPS" ]; then
     usage
 fi
 
-if [ -z $WORKER_IPS ]; then
+if [ -z "$WORKER_IPS" ]; then
     usage
 fi
 
-if [ -z $SSH_KEY ]; then
+if [ -z "$SSH_KEY" ]; then
     usage
 fi
+
+set -u
 
 master_ip_list=($MASTER_IPS)
 master_ip=${master_ip_list[0]}

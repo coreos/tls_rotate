@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+set -eo pipefail
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 
@@ -11,7 +11,8 @@ Usage: ./update_kubeconfig.sh
 Set the following environment variables to run this script:
     AWS_ACCESS_KEY_ID       The accesss key ID to the aws account
     AWS_SECRET_ACCESS_KEY   The access secret to the aws account
-    S3_BUCKET               The name of the S3 bucket
+    S3_BUCKET               The name of the S3 bucket, start with "s3://"
+
 EOF
     exit 1
 }
@@ -22,13 +23,14 @@ if [ -z $(which aws) ]; then
     exit 1
 fi
 
-if [ -z $AWS_ACCESS_KEY_ID ]; then
+if [ -z "$AWS_ACCESS_KEY_ID" ]; then
     usage
 fi
 
-if [ -z $AWS_SECRET_ACCESS_KEY ]; then
+if [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
     usage
 fi
 
+set -u
 
 aws s3 cp ${DIR}/../generated/auth/kubeconfig ${S3_BUCKET}

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+set -eo pipefail
 
 function usage() {
     >&2 cat << EOF
@@ -14,6 +14,7 @@ Set the following environment variables to run this script:
     WORKER_IPS          The list of private IPs of the worker nodes, separated by space
 
     SSH_KEY             The path to the ssh private key that allows to login the master nodes
+
 EOF
     exit 1
 }
@@ -62,21 +63,23 @@ if [ -z $(which kubectl) ]; then
     exit 1
 fi
 
-if [ -z $KUBECONFIG ]; then
+if [ -z "$KUBECONFIG" ]; then
     usage
 fi
 
-if [ -z $MASTER_IPS ]; then
+if [ -z "$MASTER_IPS" ]; then
     usage
 fi
 
-if [ -z $WORKER_IPS ]; then
+if [ -z "$WORKER_IPS" ]; then
     usage
 fi
 
-if [ -z $SSH_KEY ]; then
+if [ -z "$SSH_KEY" ]; then
     usage
 fi
+
+set -u
 
 echo "update CA"
 kubectl patch -f ./generated/patches/step_1/kube-apiserver-secret.patch -p "$(cat ./generated/patches/step_1/kube-apiserver-secret.patch)"
@@ -115,5 +118,7 @@ export KUBECONFIG=./generated/auth/kubeconfig
 
 wait_apiserver
 
+echo
+echo "Cluster CA and certs are successfully rotated"
 echo "Please reboot all nodes one by one to ensure all pods update their service account"
 echo "This can be done by running ./reboot_helper.sh"
