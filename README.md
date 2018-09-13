@@ -1,50 +1,82 @@
 # TLS Rotation
 Instructions on how to rotate TLS CA and certs for a Tectonic cluster.
 
-### Prerequisite
-
-`jq`
-`kubectl`
-`kubeconfig`
-
 ## Generate new certs and patches
 
 #### Prerequisite
 
 - `jq`
 - `kubectl`
-- `kubeconfig`
-- `KUBECONFIG BASE_DOMAIN CLUSTER_NAME`
+- `KUBECONFIG` kubeconfig of the cluster.
+- `BASE_DOMAIN` base domain of the cluster, you might be able to retrieve it from the server addres in the kubeconfig, e.g. `https://${CLUSTER_NAME}-api.${BASE_DOMAIN}:443`
+- `CLUSTER_NAME` name of the cluster, you might be able to retrieve it from the server addres in the kubeconfig, e.g. `https://${CLUSTER_NAME}-api.${BASE_DOMAIN}:443`
+
+#### Run
 
 ```shell
 export KUBECONFIG=PATH_TO_KUBECONFIG
 export BASE_DOMAIN=example.com
 export CLUSTER_NAME=my-cluster
+
 ./gencert.sh generated
-...
-Certs and patches generated!
 ```
 
-## Rotate the CA and certs
+## Rotate Etcd CA and certs
 
 #### Prerequisite
 
-- MUST be able to ssh into the master, worker and etcd nodes
 - `kubectl`
-- `MASTER_IPS WORKER_IPS ETCD_IPS`
+- `KUBECONFIG` kubeconfig of the cluster.
+- `MASTER_IPS` List of public IPs of the master nodes, separated by space.
+- `ETCD_IPS` List of private IPs of the etcd nodes, seperated by space.
+- `SSH_KEY` The ssh key for login in the master nodes.
 
-#### Update Etcd CA and certs
-
-
-
-
-kubectl get secret kube-apiserver -n kube-system -ojson | jq -r '.data["ca.crt"]' | base64 -d > ${CERT_DIR}/old_new_ca.crt
-
-kubectl get secret kube-apiserver -n kube-system -ojson | jq -r '.data["etcd-client-ca.crt"]' | base64 -d > ${ETCD_TLS}/old_new_ca.crt${CERT_DIR}/old_new_ca.crt
+#### Run
 
 ```shell
-export APISERVER_CLUSTER_IP=10.3.0.1
-export BASE_DOMAIN=example.coreos.com
-export CLUSTER_NAME=my-cluster
-./gencerts.sh generated
+export KUBECONFIG=PATH_TO_KUBECONFIG
+export MASTER_IPS="IP1 IP2 ..."
+export ETCD_IPS="IP1 IP2 ..."
+export SSH_KEY="/home/.ssh/id_rsa"
+
+./rotate_etcd.sh
 ```
+
+## Rotate CA and certs in the cluster
+
+#### Prerequisite
+
+- `kubectl`
+- `KUBECONFIG` kubeconfig of the cluster.
+- `MASTER_IPS` List of public IPs of the master nodes, separated by space.
+- `WORKER_IPS` List of private IPs of the worker nodes, separated by space.
+- `SSH_KEY` The ssh key for login in the master nodes.
+
+#### Run
+
+```shell
+export KUBECONFIG=PATH_TO_KUBECONFIG
+export MASTER_IPS="IP1 IP2 ..."
+export WORKER_IPS="IP1 IP2 ..."
+export SSH_KEY="/home/.ssh/id_rsa"
+
+./rotate_cluster.sh
+```
+
+#### NOTE
+In order to rotate the kubelet certs, the kubeconfig on host needs to be updated.
+On AWS platform, this will be achieved by replacing the kubeconfig file
+hosted on the S3 bucket with the generated kubeconfig at `./generated/auth/kubeconfig`
+
+A simple script (`aws/update_kubeconfig.sh`) is also provided for the task.
+
+## Reboot Cluster
+
+After updating the CA and certs of the API server, we need to restart all the pods
+to ensure they refresh their service account.
+
+This can be done by reboot all the nodes in the cluster.
+
+A script (`./reboot_helper.sh`) is provided to make the step easier.
+Once the reboot is done, the pods will come back eventually.
+At this point, the CA rotation is fully completed.

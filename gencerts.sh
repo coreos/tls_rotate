@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+set -euo pipefail
+
 function usage() {
     >&2 cat << EOF
 Usage: ./gencerts.sh
@@ -30,6 +32,7 @@ fi
 if [ -z $BASE_DOMAIN ]; then
     usage
 fi
+
 if [ -z $CLUSTER_NAME ]; then
     usage
 fi
@@ -275,5 +278,5 @@ EOF
 
 
 echo ""
-echo "Certs and patches generated!"
+echo "certs and patches generated!"
 echo ""
