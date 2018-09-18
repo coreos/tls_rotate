@@ -77,7 +77,10 @@ In order to rotate the kubelet certs, the kubeconfig on host needs to be updated
 On AWS platform, this will be achieved by replacing the kubeconfig file
 hosted on the S3 bucket with the generated kubeconfig at `./generated/auth/kubeconfig`
 
-A simple script (`aws/update_kubeconfig.sh`) is also provided for the task.
+A simple program (`aws/update_kubeconfig`) is also provided for the task:
+```shell
+./aws/update_kubeconfig --tfstate=PATH_TO_TFSTATE_FILE --kubeconfig=./generated/auth/kubeconfig
+```
 
 **PLEASE MAKE SURE THE KUBECONFIG IS UPDATED CORRECTLY, OTHERWISE THE ROTATION WILL FAIL!**
 

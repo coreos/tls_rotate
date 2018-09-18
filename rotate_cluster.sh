@@ -94,7 +94,8 @@ sleep 10
 restart_apiserver
 
 echo
-echo "Replace your kubeconfig on the cloud storage, you can run ./aws/update_kubeconfig.sh if your cluster in on AWS."
+echo "Replace your kubeconfig on the cloud storage and update your terraform tfstate file"
+echo "You can run ./aws/update_kubeconfig if your cluster in on AWS."
 echo "After that's done, press y to continue"
 echo
 
