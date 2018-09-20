@@ -13,7 +13,7 @@ Instructions on how to rotate TLS CA and certs for a Tectonic cluster.
 #### Prerequisite
 
 - `jq`
-- `kubectl`
+- `kubectl, version >= 1.9.6`
 - `KUBECONFIG` kubeconfig of the cluster.
 - `BASE_DOMAIN` base domain of the cluster, you might be able to retrieve it from the server addres in the kubeconfig, e.g. `https://${CLUSTER_NAME}-api.${BASE_DOMAIN}:443`
 - `CLUSTER_NAME` name of the cluster, you might be able to retrieve it from the server addres in the kubeconfig, e.g. `https://${CLUSTER_NAME}-api.${BASE_DOMAIN}:443`
@@ -97,6 +97,17 @@ to ensure they refresh their service account.
 
 This can be done by reboot all the nodes in the cluster.
 
-A script (`./reboot_helper.sh`) is provided to make the step easier.
+A script (`./utils/reboot_helper.sh`) is provided to make the step easier.
 Once the reboot is done, the pods will come back eventually.
 At this point, the CA rotation is fully completed.
+
+
+## Verification
+
+After the above steps, you can verify the success of the CA and certs rotation:
+
+- Old `kubeconfig` should **NOT** be able to contact the API server, however the new kubeconfig should be able to talk to it.
+- All nodes are expected to be `Ready`, all pods are expected to be `Running`
+- Try to fetch the logs of `kube-apiserver`, `kube-scheduler` and `kube-controller-namager`, they should all be running correctly without spitting errors.
+  E.g. ```kubectl logs -lk8s-app=kube-scheduler -n kube-system`
+- You should be able to login the `Tectonic Console` and create some test pods.

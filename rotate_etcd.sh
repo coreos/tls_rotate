@@ -35,9 +35,19 @@ function restart_apiserver() {
 }
 
 if [ -z $(which kubectl) ]; then
-    echo "kubectl is required"
+    echo "kubectl (>=v1.11) is required"
     exit 1
 fi
+
+
+kubectl_version_major=$(kubectl version --client -ojson | jq -r '.clientVersion | .major')
+kubectl_version_minor=$(kubectl version --client -ojson | jq -r '.clientVersion | .minor')
+
+if (( ${kubectl_version_major} < 1 || ${kubectl_version_minor} < 11 )); then
+    echo "kubectl version too old, requires >=v1.11"
+    exit 1
+fi
+
 
 if [ -z "$KUBECONFIG" ]; then
     usage
