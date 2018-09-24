@@ -2,6 +2,8 @@
 
 set -eo pipefail
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
+
 function usage() {
     >&2 cat << EOF
 Usage: ./rotate_cluster.sh
@@ -58,10 +60,7 @@ function restart_kubelet() {
 }
 
 
-if [ -z $(which kubectl) ]; then
-    echo "kubectl (>=v1.11) is required"
-    exit 1
-fi
+kubectl=${DIR}/kubectl
 
 kubectl_version_major=$(kubectl version --client -ojson | jq -r '.clientVersion | .major')
 kubectl_version_minor=$(kubectl version --client -ojson | jq -r '.clientVersion | .minor')

@@ -1,6 +1,8 @@
 #!/bin/bash -e
 
-set -euo pipefail
+set -eo pipefail
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 
 function usage() {
     >&2 cat << EOF
@@ -20,18 +22,11 @@ EOF
     exit 1
 }
 
-if [ -z $(which kubectl) ]; then
-    echo "kubectl (>=v1.11) is required"
-    exit 1
-fi
+
+kubectl=${DIR}/kubectl
 
 kubectl_version_major=$(kubectl version --client -ojson | jq -r '.clientVersion | .major')
 kubectl_version_minor=$(kubectl version --client -ojson | jq -r '.clientVersion | .minor')
-
-if (( ${kubectl_version_major} < 1 || ${kubectl_version_minor} < 11 )); then
-    echo "kubectl version too old, requires >=v1.11"
-    exit 1
-fi
 
 if [ -z $KUBECONFIG ]; then
     usage
@@ -45,6 +40,12 @@ if [ -z $CLUSTER_NAME ]; then
     usage
 fi
 
+set -u
+
+# On aws, api_endpoint = "//${CLUSTER_NAME}-api.${BASE_DOMAIN}"
+# On bare-metal, api_endpoint = "//${CLUSTER_NAME}.${BASE_DOMAIN}"
+untrimmed_api_endpoint=$(kubectl config view -ojson | jq -r '.clusters[0].cluster.server' | cut -d: -f 2)
+export APISERVER_ENDPOINT=${untrimmed_api_endpoint:2}
 
 export APISERVER_CLUSTER_IP=$(kubectl get services kubernetes -n default -o json | jq -r '.spec.clusterIP')
 OLD_CA=$(kubectl get secret kube-apiserver -n kube-system -o json | jq -r '.data["ca.crt"]')
@@ -210,7 +211,7 @@ kind: Config
 clusters:
 - name: my-cluster
   cluster:
-    server: https://${CLUSTER_NAME}-api.${BASE_DOMAIN}:443
+    server: https://${APISERVER_ENDPOINT}:443
     certificate-authority-data: $( openssl base64 -A -in ${CERT_DIR}/old_new_ca.crt ) 
 users:
 - name: kubelet

@@ -13,7 +13,7 @@ Instructions on how to rotate TLS CA and certs for a Tectonic cluster.
 #### Prerequisite
 
 - `jq`
-- `kubectl, version >= 1.9.6`
+- `kubectl, version >= v1.9.0`, already included in the repo.
 - `KUBECONFIG` kubeconfig of the cluster.
 - `BASE_DOMAIN` base domain of the cluster, you might be able to retrieve it from the server addres in the kubeconfig, e.g. `https://${CLUSTER_NAME}-api.${BASE_DOMAIN}:443`
 - `CLUSTER_NAME` name of the cluster, you might be able to retrieve it from the server addres in the kubeconfig, e.g. `https://${CLUSTER_NAME}-api.${BASE_DOMAIN}:443`
