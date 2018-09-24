@@ -74,17 +74,14 @@ export SSH_KEY="/home/.ssh/id_rsa"
 
 #### NOTE
 In order to rotate the kubelet certs, the kubeconfig on host needs to be updated.
-On AWS platform, this will be achieved by replacing the kubeconfig file
-hosted on the S3 bucket with the generated kubeconfig at `./generated/auth/kubeconfig`
-
-A simple program (`aws/update_kubeconfig`) is also provided for the task:
+If you are on AWS platform, we are providing a simple program for this task:
 ```shell
 ./aws/update_kubeconfig --tfstate=PATH_TO_TFSTATE_FILE --kubeconfig=./generated/auth/kubeconfig
 ```
 
 **PLEASE MAKE SURE THE KUBECONFIG IS UPDATED CORRECTLY, OTHERWISE THE ROTATION WILL FAIL!**
 
-You can run the following command to verify:
+E.g. You can run the following command to verify if you are on AWS:
 ```shell
 aws s3 cp s3://S3_BUCKET_NAME/kubeconfig /tmp/kubeconfig
 diff /tmp/kubeconfig generated/auth/kubeconfig
