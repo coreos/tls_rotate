@@ -51,16 +51,16 @@ export APISERVER_CLUSTER_IP=$(kubectl get services kubernetes -n default -o json
 OLD_CA=$(kubectl get secret kube-apiserver -n kube-system -o json | jq -r '.data["ca.crt"]')
 OLD_ETCD_CA=$(kubectl get secret kube-apiserver -n kube-system -o json | jq -r '.data["etcd-client-ca.crt"]')
 
-export DIR="generated"
+export TARGET_DIR="generated"
 if [ $# -eq 1 ]; then
-    DIR="$1"
+    TARGET_DIR="$1"
 fi
 
-export CERT_DIR=$DIR/tls
+export CERT_DIR=${TARGET_DIR}/tls
 mkdir -p $CERT_DIR
-PATCHES=$DIR/patches
+PATCHES=${TARGET_DIR}/patches
 mkdir -p $PATCHES
-mkdir -p $DIR/auth
+mkdir -p ${TARGET_DIR}/auth
 
 # Configure expected OpenSSL CA configs.
 
@@ -70,6 +70,9 @@ touch $CERT_DIR/index.txt.attr
 echo 1000 > $CERT_DIR/serial
 # Sign multiple certs for the same CN
 echo "unique_subject = no" > $CERT_DIR/index.txt.attr
+
+# Generate the openssl.conf
+${DIR}/genopenssl.sh
 
 function openssl_req() {
     openssl genrsa -out ${1}/${2}.key 2048
@@ -95,7 +98,7 @@ function generate_ca() {
     export CA_CERT=${1}/ca.crt
 }
 
-generate_ca $DIR/tls
+generate_ca ${TARGET_DIR}/tls
 
 # Generate CSRs for all components
 openssl_req $CERT_DIR kubelet "/CN=kubelet/O=system:masters"
@@ -118,7 +121,7 @@ done
 
 
 # Generate a new etcd CA and associated certs.
-ETCD_TLS=$DIR/tls/etcd
+ETCD_TLS=${TARGET_DIR}/tls/etcd
 mkdir -p $ETCD_TLS
 openssl genrsa -out $ETCD_TLS/ca.key 4096
 openssl req -config openssl.conf \
@@ -205,7 +208,7 @@ data:
   ca.crt: $( openssl base64 -A -in ${CERT_DIR}/old_new_ca.crt )
 EOF
 
-cat > $DIR/auth/kubeconfig << EOF
+cat > ${TARGET_DIR}/auth/kubeconfig << EOF
 apiVersion: v1
 kind: Config
 clusters:
