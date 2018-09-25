@@ -62,15 +62,6 @@ function restart_kubelet() {
 
 kubectl=${DIR}/kubectl
 
-kubectl_version_major=$(kubectl version --client -ojson | jq -r '.clientVersion | .major')
-kubectl_version_minor=$(kubectl version --client -ojson | jq -r '.clientVersion | .minor')
-
-if (( ${kubectl_version_major} < 1 || ${kubectl_version_minor} < 11 )); then
-    echo "kubectl version too old, requires >=v1.11"
-    exit 1
-fi
-
-
 if [ -z "$KUBECONFIG" ]; then
     usage
 fi
@@ -131,4 +122,4 @@ wait_apiserver
 echo
 echo "Cluster CA and certs are successfully rotated"
 echo "Please reboot all nodes one by one to ensure all pods update their service account"
-echo "This can be done by running ./reboot_helper.sh"
+echo "This can be done by running ./utils/reboot_helper.sh"

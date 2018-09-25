@@ -12,8 +12,8 @@ Instructions on how to rotate TLS CA and certs for a Tectonic cluster.
 
 #### Prerequisite
 
+- `ssh-agent` is required for ssh'ing into the nodes to update files.
 - `jq`
-- `kubectl, version >= v1.9.0`, already included in the repo.
 - `KUBECONFIG` kubeconfig of the cluster.
 - `BASE_DOMAIN` base domain of the cluster, you might be able to retrieve it from the server addres in the kubeconfig, e.g. `https://${CLUSTER_NAME}-api.${BASE_DOMAIN}:443`
 - `CLUSTER_NAME` name of the cluster, you might be able to retrieve it from the server addres in the kubeconfig, e.g. `https://${CLUSTER_NAME}-api.${BASE_DOMAIN}:443`
@@ -34,11 +34,11 @@ export CLUSTER_NAME=my-cluster
 
 #### Prerequisite
 
-- `kubectl`
 - `KUBECONFIG` kubeconfig of the cluster.
 - `MASTER_IPS` List of public IPs of the master nodes, separated by space.
 - `ETCD_IPS` List of private IPs of the etcd nodes, seperated by space.
 - `SSH_KEY` The ssh key for login in the master nodes.
+- The etcd members MUST be in healthy state before rotating the CA and certs.
 
 #### Run
 

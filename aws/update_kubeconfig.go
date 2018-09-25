@@ -13,6 +13,10 @@ import (
 	"github.com/hashicorp/terraform/terraform"
 )
 
+const (
+	usage = `Usage: update_kubconfig --tfstate=<PATH_TO_TERRAFORM_STATE_FILE> --kubeconfig=<PATH_TO_KUBECONFIG>`
+)
+
 var (
 	stateFilePath      string
 	kubeconfigFilePath string
@@ -27,19 +31,19 @@ func main() {
 	flag.Parse()
 
 	if stateFilePath == "" {
-		log.Fatal("-tfstate MUST be set")
+		log.Fatal(usage)
 	}
 
 	if kubeconfigFilePath == "" {
-		log.Fatal("-kubeconfig MUST be set")
+		log.Fatal(usage)
 	}
 
 	if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
-		log.Fatal("AWS_ACCESS_KEY_ID MUST be set")
+		log.Fatal("env AWS_ACCESS_KEY_ID MUST be set")
 	}
 
 	if os.Getenv("AWS_SECRET_ACCESS_KEY") == "" {
-		log.Fatal("AWS_SECRET_ACCESS_KEY MUST be set")
+		log.Fatal("env AWS_SECRET_ACCESS_KEY MUST be set")
 	}
 
 	var state terraform.State
