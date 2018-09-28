@@ -24,7 +24,7 @@ EOF
 
 echo "Unzipping kubectl v1.9.0"
 unzip ${DIR}/kubectl.zip
-kubectl=${DIR}/kubectl
+KUBECTL=${DIR}/kubectl
 
 if [ -z $KUBECONFIG ]; then
     usage
@@ -42,12 +42,12 @@ set -u
 
 # On aws, api_endpoint = "//${CLUSTER_NAME}-api.${BASE_DOMAIN}"
 # On bare-metal, api_endpoint = "//${CLUSTER_NAME}.${BASE_DOMAIN}"
-untrimmed_api_endpoint=$(kubectl config view -ojson | jq -r '.clusters[0].cluster.server' | cut -d: -f 2)
+untrimmed_api_endpoint=$(${KUBECTL} config view -ojson | jq -r '.clusters[0].cluster.server' | cut -d: -f 2)
 export APISERVER_ENDPOINT=${untrimmed_api_endpoint:2}
 
-export APISERVER_CLUSTER_IP=$(kubectl get services kubernetes -n default -o json | jq -r '.spec.clusterIP')
-OLD_CA=$(kubectl get secret kube-apiserver -n kube-system -o json | jq -r '.data["ca.crt"]')
-OLD_ETCD_CA=$(kubectl get secret kube-apiserver -n kube-system -o json | jq -r '.data["etcd-client-ca.crt"]')
+export APISERVER_CLUSTER_IP=$(${KUBECTL} get services kubernetes -n default -o json | jq -r '.spec.clusterIP')
+OLD_CA=$(${KUBECTL} get secret kube-apiserver -n kube-system -o json | jq -r '.data["ca.crt"]')
+OLD_ETCD_CA=$(${KUBECTL} get secret kube-apiserver -n kube-system -o json | jq -r '.data["etcd-client-ca.crt"]')
 
 export TARGET_DIR="generated"
 if [ $# -eq 1 ]; then

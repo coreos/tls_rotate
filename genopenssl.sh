@@ -4,9 +4,9 @@ set -euo pipefail
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 
-kubectl=${DIR}/kubectl
+KUBECTL=${DIR}/kubectl
 
-ETCD_SANS_LENGTH=$(kubectl get endpoints etcd -n kube-system -ojson | jq -r '.subsets[0].addresses | length')
+ETCD_SANS_LENGTH=$(${KUBECTL} get endpoints etcd -n kube-system -ojson | jq -r '.subsets[0].addresses | length')
 
 export ETCD_SANS=""
 for ((i = 0 ; i < ${ETCD_SANS_LENGTH} ; i++ )); do

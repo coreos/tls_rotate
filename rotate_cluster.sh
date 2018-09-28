@@ -25,8 +25,8 @@ function wait_apiserver() {
     running_pods=0
     terminating_pods=0
     until [[ $running_pods > 0 && $terminating_pods == 0 ]]; do
-        running_pods=$(kubectl get pods -l k8s-app=kube-apiserver -n kube-system --field-selector=status.phase=Running 2>/dev/null | wc -l || true)
-        terminating_pods=$(kubectl get pods -l k8s-app=kube-apiserver -n kube-system --field-selector=status.phase=Terminating 2>/dev/null | wc -l || true)
+        running_pods=$(${KUBECTL} get pods -l k8s-app=kube-apiserver -n kube-system --field-selector=status.phase=Running 2>/dev/null | wc -l || true)
+        terminating_pods=$(${KUBECTL} get pods -l k8s-app=kube-apiserver -n kube-system --field-selector=status.phase=Terminating 2>/dev/null | wc -l || true)
         echo "running pods: $running_pods, terminating pods: $terminating_pods"
         sleep 5
     done
@@ -36,7 +36,7 @@ function wait_apiserver() {
 
 function restart_apiserver() {
     echo "restart API Server"
-    kubectl delete pod -l k8s-app=kube-apiserver -n kube-system || true
+    ${KUBECTL} delete pod -l k8s-app=kube-apiserver -n kube-system || true
     wait_apiserver
 }
 
@@ -60,7 +60,7 @@ function restart_kubelet() {
 }
 
 
-kubectl=${DIR}/kubectl
+KUBECTL=${DIR}/kubectl
 
 if [ -z "$KUBECONFIG" ]; then
     usage
@@ -81,12 +81,12 @@ fi
 set -u
 
 echo "update CA"
-kubectl patch -f ./generated/patches/step_1/kube-apiserver-secret.patch -p "$(cat ./generated/patches/step_1/kube-apiserver-secret.patch)"
-kubectl patch -f ./generated/patches/step_1/kube-controller-manager-secret.patch -p "$(cat ./generated/patches/step_1/kube-controller-manager-secret.patch)"
-kubectl patch -f ./generated/patches/step_1/tectonic-ca-cert-secret.patch -p "$(cat ./generated/patches/step_1/tectonic-ca-cert-secret.patch)"
-kubectl patch -f ./generated/patches/step_1/ingress-tls.patch -p "$(cat ./generated/patches/step_1/ingress-tls.patch)"
-kubectl patch -f ./generated/patches/step_1/identity-grpc-client.patch -p "$(cat ./generated/patches/step_1/identity-grpc-client.patch)"
-kubectl patch -f ./generated/patches/step_1/identity-grpc-server.patch -p "$(cat ./generated/patches/step_1/identity-grpc-server.patch)"
+${KUBECTL} patch -f ./generated/patches/step_1/kube-apiserver-secret.patch -p "$(cat ./generated/patches/step_1/kube-apiserver-secret.patch)"
+${KUBECTL} patch -f ./generated/patches/step_1/kube-controller-manager-secret.patch -p "$(cat ./generated/patches/step_1/kube-controller-manager-secret.patch)"
+${KUBECTL} patch -f ./generated/patches/step_1/tectonic-ca-cert-secret.patch -p "$(cat ./generated/patches/step_1/tectonic-ca-cert-secret.patch)"
+${KUBECTL} patch -f ./generated/patches/step_1/ingress-tls.patch -p "$(cat ./generated/patches/step_1/ingress-tls.patch)"
+${KUBECTL} patch -f ./generated/patches/step_1/identity-grpc-client.patch -p "$(cat ./generated/patches/step_1/identity-grpc-client.patch)"
+${KUBECTL} patch -f ./generated/patches/step_1/identity-grpc-server.patch -p "$(cat ./generated/patches/step_1/identity-grpc-server.patch)"
 
 sleep 10
 
@@ -107,12 +107,12 @@ done
 restart_kubelet
 
 echo "update api server cert."
-kubectl patch -f ./generated/patches/step_2/kube-apiserver-secret.patch -p "$(cat ./generated/patches/step_2/kube-apiserver-secret.patch)"
+${KUBECTL} patch -f ./generated/patches/step_2/kube-apiserver-secret.patch -p "$(cat ./generated/patches/step_2/kube-apiserver-secret.patch)"
 
 sleep 10
 
 echo "restart API server"
-kubectl delete pod -l k8s-app=kube-apiserver -n kube-system || true
+${KUBECTL} delete pod -l k8s-app=kube-apiserver -n kube-system || true
 
 # Use the new kubeconfig for listing pods because we just rotated the API server certs above.
 export KUBECONFIG=./generated/auth/kubeconfig

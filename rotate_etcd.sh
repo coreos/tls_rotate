@@ -23,12 +23,12 @@ EOF
 
 function restart_apiserver() {
     echo "restart API Server"
-    kubectl delete pod -l k8s-app=kube-apiserver -n kube-system || true
+    ${KUBECTL} delete pod -l k8s-app=kube-apiserver -n kube-system || true
     running_pods=0
     terminating_pods=0
     until [[ $running_pods > 0 && $terminating_pods == 0 ]]; do
-        running_pods=$(kubectl get pods -l k8s-app=kube-apiserver -n kube-system --field-selector=status.phase=Running 2>/dev/null | wc -l || true)
-        terminating_pods=$(kubectl get pods -l k8s-app=kube-apiserver -n kube-system --field-selector=status.phase=Terminating 2>/dev/null | wc -l || true)
+        running_pods=$(${KUBECTL} get pods -l k8s-app=kube-apiserver -n kube-system --field-selector=status.phase=Running 2>/dev/null | wc -l || true)
+        terminating_pods=$(${KUBECTL} get pods -l k8s-app=kube-apiserver -n kube-system --field-selector=status.phase=Terminating 2>/dev/null | wc -l || true)
         echo "running pods: $running_pods, terminating pods: $terminating_pods"
         sleep 5
     done
@@ -37,7 +37,7 @@ function restart_apiserver() {
 }
 
 
-kubectl=${DIR}/kubectl
+KUBECTL=${DIR}/kubectl
 
 if [ -z "$KUBECONFIG" ]; then
     usage
@@ -58,7 +58,7 @@ fi
 set -u
 
 echo "update etcd CA"
-kubectl patch -f ./generated/patches/etcd/etcd-ca.patch -p "$(cat ./generated/patches/etcd/etcd-ca.patch)"
+${KUBECTL} patch -f ./generated/patches/etcd/etcd-ca.patch -p "$(cat ./generated/patches/etcd/etcd-ca.patch)"
 
 sleep 10
 
@@ -86,7 +86,7 @@ for ADDR in $ETCD_IPS; do
 done
 
 echo "update etcd client certs"
-kubectl patch -f ./generated/patches/etcd/etcd-client-cert.patch -p "$(cat ./generated/patches/etcd/etcd-client-cert.patch)"
+${KUBECTL} patch -f ./generated/patches/etcd/etcd-client-cert.patch -p "$(cat ./generated/patches/etcd/etcd-client-cert.patch)"
 
 sleep 10
 

@@ -55,7 +55,6 @@ export SSH_KEY="/home/.ssh/id_rsa"
 
 #### Prerequisite
 
-- `kubectl`
 - `KUBECONFIG` kubeconfig of the cluster.
 - `MASTER_IPS` List of public IPs of the master nodes, separated by space.
 - `WORKER_IPS` List of private IPs of the worker nodes, separated by space.
