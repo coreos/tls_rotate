@@ -22,16 +22,18 @@ EOF
 }
 
 function wait_apiserver() {
+    sleep 5
+
     running_pods=0
     terminating_pods=0
     until [[ $running_pods > 0 && $terminating_pods == 0 ]]; do
-        running_pods=$(${KUBECTL} get pods -l k8s-app=kube-apiserver -n kube-system --field-selector=status.phase=Running 2>/dev/null | wc -l || true)
-        terminating_pods=$(${KUBECTL} get pods -l k8s-app=kube-apiserver -n kube-system --field-selector=status.phase=Terminating 2>/dev/null | wc -l || true)
-        echo "running pods: $running_pods, terminating pods: $terminating_pods"
         sleep 5
+        running_pods=$(${KUBECTL} get pods -l k8s-app=kube-apiserver -n kube-system 2>/dev/null | grep Running | wc -l || true)
+        terminating_pods=$(${KUBECTL} get pods -l k8s-app=kube-apiserver -n kube-system 2>/dev/null | grep Terminating | wc -l || true)
+        echo "running pods: $running_pods, terminating pods: $terminating_pods"
     done
 
-    echo "API Server restarted"   
+    echo "API Server restarted"
 }
 
 function restart_apiserver() {
