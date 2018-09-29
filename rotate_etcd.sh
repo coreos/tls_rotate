@@ -59,7 +59,7 @@ fi
 set -u
 
 echo "update etcd CA"
-${KUBECTL} patch -f ./generated/patches/etcd/etcd-ca.patch -p "$(cat ./generated/patches/etcd/etcd-ca.patch)"
+${KUBECTL} patch -f ./generated/patches/etcd/etcd-bundle-ca.patch -p "$(cat ./generated/patches/etcd/etcd-bundle-ca.patch)"
 
 sleep 10
 
@@ -109,6 +109,28 @@ for ADDR in $ETCD_IPS; do
     echo "etcd on node $ADDR restarted"
     sleep 10
 done
+
+# Delete the old CA.
+echo "delete old CA block"
+
+echo "  update etcd CA"
+${KUBECTL} patch -f ./generated/patches/etcd/etcd-ca.patch -p "$(cat ./generated/patches/etcd/etcd-ca.patch)"
+
+sleep 10
+
+restart_apiserver
+
+for ADDR in $ETCD_IPS; do
+    echo "  update etcd CA on node $ADDR"
+    ssh -A -o StrictHostKeyChecking=no -i ${SSH_KEY} core@${master_ip} "scp -o StrictHostKeyChecking=no generated/tls/etcd/ca.crt core@$ADDR:/home/core/ca.crt"
+    ssh -A -o StrictHostKeyChecking=no -i ${SSH_KEY} core@${master_ip} "ssh -o StrictHostKeyChecking=no core@$ADDR sudo chown etcd:etcd /home/core/ca.crt"
+    ssh -A -o StrictHostKeyChecking=no -i ${SSH_KEY} core@${master_ip} "ssh -o StrictHostKeyChecking=no core@$ADDR sudo mv /home/core/ca.crt /etc/ssl/etcd/ca.crt"
+    echo "  restart etcd on node $ADDR"
+    ssh -A -o StrictHostKeyChecking=no -i ${SSH_KEY} core@${master_ip} "ssh -o StrictHostKeyChecking=no core@$ADDR sudo systemctl restart etcd-member"
+    echo "  etcd on node $ADDR restarted"
+    sleep 10
+done
+
 
 echo
 echo "etcd CA and certs are succesfully rotated!"

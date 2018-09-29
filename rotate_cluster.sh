@@ -21,25 +21,25 @@ EOF
     exit 1
 }
 
-function wait_apiserver() {
+function wait_pods() {
     sleep 5
 
     running_pods=0
     terminating_pods=0
     until [[ $running_pods > 0 && $terminating_pods == 0 ]]; do
         sleep 5
-        running_pods=$(${KUBECTL} get pods -l k8s-app=kube-apiserver -n kube-system 2>/dev/null | grep Running | wc -l || true)
-        terminating_pods=$(${KUBECTL} get pods -l k8s-app=kube-apiserver -n kube-system 2>/dev/null | grep Terminating | wc -l || true)
+        running_pods=$(${KUBECTL} get pods -l k8s-app=${1} -n kube-system 2>/dev/null | grep Running | wc -l || true)
+        terminating_pods=$(${KUBECTL} get pods -l k8s-app=${1} -n kube-system 2>/dev/null | grep Terminating | wc -l || true)
         echo "running pods: $running_pods, terminating pods: $terminating_pods"
     done
 
-    echo "API Server restarted"
+    echo "${1} restarted"
 }
 
-function restart_apiserver() {
-    echo "restart API Server"
-    ${KUBECTL} delete pod -l k8s-app=kube-apiserver -n kube-system || true
-    wait_apiserver
+function restart_pods() {
+    echo "restart ${1}"
+    ${KUBECTL} delete pod -l k8s-app=${1} -n kube-system || true
+    wait_pods ${1}
 }
 
 function restart_kubelet() {
@@ -92,7 +92,7 @@ ${KUBECTL} patch -f ./generated/patches/step_1/identity-grpc-server.patch -p "$(
 
 sleep 10
 
-restart_apiserver
+restart_pods kube-apiserver
 
 echo
 echo "Please replace the kubeconfig on each node before proceeding"
@@ -119,7 +119,35 @@ ${KUBECTL} delete pod -l k8s-app=kube-apiserver -n kube-system || true
 # Use the new kubeconfig for listing pods because we just rotated the API server certs above.
 export KUBECONFIG=./generated/auth/kubeconfig
 
-wait_apiserver
+wait_pods kube-apiserver
+
+echo "restart kube-controller-manager and pod checkpointer"
+restart_pods kube-controller-manager
+restart_pods pod-checkpointer
+
+echo "delete old CA block."
+${KUBECTL} patch -f ./generated/patches/step_3/kube-apiserver-secret.patch -p "$(cat ./generated/patches/step_3/kube-apiserver-secret.patch)"
+${KUBECTL} patch -f ./generated/patches/step_3/kube-controller-manager-secret.patch -p "$(cat ./generated/patches/step_3/kube-controller-manager-secret.patch)"
+
+sleep 10
+
+restart_pods kube-apiserver
+
+cp ./generated/patches/step_3/final_kubeconfig ./generated/auth/kubeconfig
+
+echo
+echo "Please replace the kubeconfig again on each node before proceeding"
+echo "If you are on AWS, you can run ./aws/update_kubeconfig"
+echo "If you are on other platform, please contact support for instructions"
+echo "Press 'y' when finished"
+echo
+
+REPLY=0
+until [[ $REPLY == y ]]; do
+    read -p "" -n 1 -r
+done
+
+restart_kubelet
 
 echo
 echo "Cluster CA and certs are successfully rotated"

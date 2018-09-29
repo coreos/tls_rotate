@@ -23,7 +23,7 @@ EOF
 }
 
 echo "Unzipping kubectl v1.9.0"
-unzip ${DIR}/kubectl.zip
+echo "y"| unzip ${DIR}/kubectl.zip 2> /dev/null
 KUBECTL=${DIR}/kubectl
 
 if [ -z $KUBECONFIG ]; then
@@ -54,8 +54,10 @@ if [ $# -eq 1 ]; then
     TARGET_DIR="$1"
 fi
 
+rm -fr ${TARGET_DIR}
+
 export CERT_DIR=${TARGET_DIR}/tls
-mkdir -p $CERT_DIR
+mkdir -p ${CERT_DIR}
 PATCHES=${TARGET_DIR}/patches
 mkdir -p $PATCHES
 mkdir -p ${TARGET_DIR}/auth
@@ -160,7 +162,7 @@ cat ${ETCD_TLS}/ca.crt >> ${ETCD_TLS}/old_new_ca.crt
 PATCH_ETCD=$PATCHES/etcd
 mkdir $PATCH_ETCD
 
-cat > $PATCH_ETCD/etcd-ca.patch << EOF
+cat > $PATCH_ETCD/etcd-bundle-ca.patch << EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -168,6 +170,16 @@ metadata:
   namespace: kube-system
 data:
   etcd-client-ca.crt: $( openssl base64 -A -in ${ETCD_TLS}/old_new_ca.crt )
+EOF
+
+cat > $PATCH_ETCD/etcd-ca.patch << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kube-apiserver
+  namespace: kube-system
+data:
+  etcd-client-ca.crt: $( openssl base64 -A -in ${ETCD_TLS}/ca.crt )
 EOF
 
 cat > $PATCH_ETCD/etcd-client-cert.patch << EOF
@@ -206,7 +218,7 @@ data:
   ca.crt: $( openssl base64 -A -in ${CERT_DIR}/old_new_ca.crt )
 EOF
 
-cat > ${TARGET_DIR}/auth/kubeconfig << EOF
+cat > $PATCH_STEP_1/bundle_kubeconfig << EOF
 apiVersion: v1
 kind: Config
 clusters:
@@ -224,6 +236,8 @@ contexts:
     cluster: my-cluster
     user: kubelet
 EOF
+
+cp $PATCH_STEP_1/bundle_kubeconfig ${TARGET_DIR}/auth/kubeconfig
 
 # Also generate patches that updates CAs in the tectonic-system
 cat > $PATCH_STEP_1/tectonic-ca-cert-secret.patch << EOF
@@ -284,6 +298,50 @@ metadata:
 data:
   apiserver.crt: $( openssl base64 -A -in ${CERT_DIR}/apiserver.crt )
   apiserver.key: $( openssl base64 -A -in ${CERT_DIR}/apiserver.key )
+EOF
+
+# 4. Generate patches that deletes the old CA.
+PATCH_STEP_3=$PATCHES/step_3
+mkdir $PATCH_STEP_3
+
+cat > $PATCH_STEP_3/kube-apiserver-secret.patch <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kube-apiserver
+  namespace: kube-system
+data:
+  ca.crt: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
+  oidc-ca.crt: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
+EOF
+
+cat > $PATCH_STEP_3/kube-controller-manager-secret.patch <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kube-controller-manager
+  namespace: kube-system
+data:
+  ca.crt: $( openssl base64 -A -in ${CERT_DIR}/ca.crt )
+EOF
+
+cat > $PATCH_STEP_3/final_kubeconfig << EOF
+apiVersion: v1
+kind: Config
+clusters:
+- name: my-cluster
+  cluster:
+    server: https://${APISERVER_ENDPOINT}:443
+    certificate-authority-data: $( openssl base64 -A -in ${CERT_DIR}/ca.crt ) 
+users:
+- name: kubelet
+  user:
+    client-certificate-data: $( openssl base64 -A -in $CERT_DIR/kubelet.crt ) 
+    client-key-data: $( openssl base64 -A -in $CERT_DIR/kubelet.key ) 
+contexts:
+- context:
+    cluster: my-cluster
+    user: kubelet
 EOF
 
 echo ""
